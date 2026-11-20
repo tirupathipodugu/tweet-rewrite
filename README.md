@@ -1,5 +1,7 @@
 # Tweet Rewrite
 
+**Demo video:** [watch / download](demo/rewrite-demo.mp4) (22 s)
+
 A Chrome extension that adds a **Rewrite** button to the X (Twitter) post box.
 
 - **Click Rewrite** to fix spelling and grammar. You get 3 versions.
