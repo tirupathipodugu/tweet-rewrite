@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tweet Rewrite settings</title>
+<style>
+  body { font: 14px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; min-width: 360px; color: #0f1419; background: #fff; }
+  h1 { font-size: 18px; margin: 0 0 16px; }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; }
+  input, select { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cfd9de; border-radius: 8px; font: inherit; }
+  small { color: #536471; }
+  button { margin-top: 18px; padding: 10px 20px; border: 0; border-radius: 9999px; background: #1d9bf0; color: #fff; font-weight: 700; cursor: pointer; }
+  #status { margin-left: 10px; color: #00ba7c; }
+</style>
+</head>
+<body>
+  <h1>Tweet Rewrite</h1>
+  <label for="mode">Rewrite with</label>
+  <select id="mode">
+    <option value="grok">Grok on X (hidden, private chat, no key)</option>
+    <option value="claude">Claude API (needs key below)</option>
+  </select>
+
+  <label for="apiKey">Anthropic API key (Claude mode only)</label>
+  <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+  <small>Stored in Chrome sync storage; sent only to api.anthropic.com.</small>
+
+  <label for="model">Model</label>
+  <select id="model">
+    <option value="claude-opus-5-5">Claude Opus 5.5 (best)</option>
+    <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (faster, cheaper)</option>
+    <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest, cheapest)</option>
+  </select>
+
+  <label for="tones">Moods shown on hover (comma separated)</label>
+  <input id="tones" placeholder="Professional, Casual, Witty, Bold, Friendly, Concise">
+
+  <button id="save">Save</button><span id="status"></span>
+  <script src="options.js"></script>
+</body>
+</html>
