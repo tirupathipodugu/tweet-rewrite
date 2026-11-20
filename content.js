@@ -2,8 +2,7 @@
 // - Click Rewrite        → fix spelling & grammar (3 versions)
 // - Hover Rewrite        → pick a mood → 3 versions in that mood
 // Versions appear right below the post box; click one to replace the draft.
-// Engine "grok" (default): X's own Grok, driven through a hidden Private Chat (not saved to history).
-// Engine "claude": Claude API with the key from Settings.
+// Uses X's own Grok, driven through a hidden Private Chat (not saved to history). No API key.
 (() => {
   const BTN_CLASS = "tr-rewrite-btn";
   const POST_CLASS = "tr-post-btn";
@@ -23,7 +22,7 @@
     }
     return null;
   }
-  const getSettings = () => chrome.storage.sync.get(["mode", "tones"]);
+  const getSettings = () => chrome.storage.sync.get(["tones"]);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
   function findEditor(toolbar) {
@@ -45,26 +44,29 @@
   }
 
   // ---------- Prompt ----------
+  // Sent as ONE line (draft as a JSON string) so no newline can trigger Grok's send early.
   function buildPrompt(draft, mood) {
     const task = mood === FIX
       ? `Give ${COUNT} versions. Version 1: only spelling, grammar and punctuation fixed, same wording and tone. ` +
         `Versions 2-${COUNT}: lightly polished for clarity, same tone and meaning.`
       : `Give ${COUNT} different rewrites in a ${mood} tone, all with spelling and grammar fixed. Make them clearly different from each other.`;
     return (
-      "Rewrite my X post draft.\n" + task + "\n" +
+      "Rewrite my X post draft. " + task + " " +
       "Return ONLY one ```json code block with an array of objects {\"label\": string, \"text\": string} " +
-      "(label = 2-4 word description of that version).\n" +
-      "Keep my formatting: every line break and blank line in the draft must stay in each text (use \\n). " +
+      "(label = 2-4 word description of that version). " +
+      "Keep my formatting: every line break and blank line in the draft must stay in each text (as \n). " +
       "Keep my meaning, links, @handles and #hashtags. " +
       `Max ${Math.max(280, draft.length)} characters each. Sound like a real person: no corporate filler, no em dashes, ` +
-      "no new hashtags or emojis.\n\nDraft:\n" + draft
+      "no new hashtags or emojis. My draft, as a JSON string: " + JSON.stringify(draft)
     );
   }
 
   // ---------- Grok engine (hidden private chat) ----------
+  // Supports both of X's Grok box designs: the older one (textarea, "Grok something", "Copy text")
+  // and the newer one (rich-text box, "Send", Private Chat toggle with aria-pressed).
   function parseVersions(root) {
-    const codes = [...root.querySelectorAll('[data-testid="markdown-code-block"] code')];
-    for (const c of codes) {
+    const codes = [...root.querySelectorAll("code")];
+    for (const c of codes.reverse()) {
       try {
         const arr = JSON.parse(c.textContent);
         if (Array.isArray(arr)) {
@@ -74,39 +76,62 @@
         }
       } catch {}
     }
-    return codes.map((c, i) => ({ label: `Version ${i + 1}`, text: c.textContent.trim() })).filter(v => v.text);
+    return [...root.querySelectorAll('[data-testid="markdown-code-block"] code')]
+      .map((c, i) => ({ label: `Version ${i + 1}`, text: c.textContent.trim() })).filter(v => v.text);
   }
+
+  const DONE_LABELS = ["Copy text", "Regenerate", "Good response"];
 
   async function grokVersions(draft, mood) {
     const grokBtn = await waitFor(() => document.querySelector('[data-testid="GrokDrawerHeader"]'), 3000);
     if (!grokBtn) throw new Error("Grok isn't available on this page. Open x.com/home and try again.");
     const D = () => document.querySelector('[data-testid="GrokDrawer"]');
     const q = sel => D()?.querySelector(sel);
+    const input = () => q("textarea") || q('[contenteditable="true"]');
+    const hasLabel = l => !!q(`button[aria-label="${l}"]`);
 
     document.documentElement.classList.add("tr-grok-busy"); // hide the Grok box while we use it
-    const wasOpen = !!q("textarea");
+    const wasOpen = !!input();
     try {
       if (!wasOpen) {
         grokBtn.click();
-        if (!await waitFor(() => q("textarea"))) throw new Error("Grok didn't open. Click X's Grok button once by hand (accept any prompt), then try again.");
+        if (!await waitFor(input)) throw new Error("Grok didn't open. Click X's Grok button once by hand (accept any prompt), then try again.");
       }
       q('button[aria-label="New Chat"]')?.click();
-      const priv = await waitFor(() => q('button[aria-label="Private Chat"]'), 4000);
-      if (!priv) throw new Error("Couldn't switch Grok to Private Chat, so nothing was sent.");
-      priv.click();
-      if (!await waitFor(() => /won.t appear in your history/i.test(D()?.innerText || ""), 4000))
-        throw new Error("Couldn't confirm Grok Private Chat, so nothing was sent.");
+      await sleep(400);
 
-      const ta = q("textarea");
-      ta.focus();
-      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, buildPrompt(draft, mood));
-      ta.dispatchEvent(new Event("input", { bubbles: true }));
-      const send = await waitFor(() => { const b = q('button[aria-label="Grok something"]'); return b && !b.disabled ? b : null; }, 4000);
+      // Private Chat: never send unless we can confirm it.
+      const priv = await waitFor(() => q('button[aria-label="Private Chat"]'), 4000);
+      if (!priv) throw new Error("Couldn't find Grok's Private Chat, so nothing was sent.");
+      if (priv.hasAttribute("aria-pressed")) {
+        if (priv.getAttribute("aria-pressed") !== "true") priv.click();
+        if (!await waitFor(() => q('button[aria-label="Private Chat"]')?.getAttribute("aria-pressed") === "true", 4000))
+          throw new Error("Couldn't turn on Grok Private Chat, so nothing was sent.");
+      } else {
+        priv.click();
+        if (!await waitFor(() => /won.t appear in your history/i.test(D()?.innerText || ""), 4000))
+          throw new Error("Couldn't confirm Grok Private Chat, so nothing was sent.");
+      }
+
+      const box = await waitFor(input, 4000);
+      if (!box) throw new Error("Grok's input box didn't appear. Try again.");
+      const prompt = buildPrompt(draft, mood);
+      box.focus();
+      if (box.tagName === "TEXTAREA") {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(box, prompt);
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        document.execCommand("insertText", false, prompt);
+      }
+      const send = await waitFor(() => {
+        const b = q('button[aria-label="Grok something"]') || q('button[aria-label="Send"]');
+        return b && !b.disabled ? b : null;
+      }, 4000);
       if (!send) throw new Error("Couldn't find Grok's send button.");
       send.click();
 
-      if (!await waitFor(() => q('button[aria-label="Copy text"]'), 90000)) throw new Error("Grok took too long. Try again.");
-      await sleep(300);
+      if (!await waitFor(() => DONE_LABELS.some(hasLabel), 90000)) throw new Error("Grok took too long. Try again.");
+      await sleep(400);
       const v = parseVersions(D());
       if (!v.length) throw new Error("Grok's answer had no versions. Try again.");
       return v;
@@ -115,13 +140,6 @@
       if (!wasOpen) { await sleep(200); q('button[aria-label="Collapse"]')?.click(); await sleep(300); }
       document.documentElement.classList.remove("tr-grok-busy");
     }
-  }
-
-  // ---------- Claude engine ----------
-  async function claudeVersions(draft, mood) {
-    const resp = await chrome.runtime.sendMessage({ type: "rewrite", draft, mood, count: COUNT, fix: mood === FIX });
-    if (!resp?.ok) throw new Error(resp?.error || "Unknown error");
-    return resp.result.variants.map(v => ({ label: v.label, text: v.text }));
   }
 
   // ---------- Inline results under the post box ----------
@@ -160,8 +178,7 @@
     boxHeader(box, mood === FIX ? "Fixing grammar…" : `Rewriting as ${mood}…`);
     box.append(el("div", "tr-loading"));
     try {
-      const { mode } = await getSettings();
-      const versions = mode === "claude" ? await claudeVersions(draft, mood) : await grokVersions(draft, mood);
+      const versions = await grokVersions(draft, mood);
       box.replaceChildren();
       boxHeader(box, mood === FIX ? "Pick a version" : `${mood} — pick a version`);
       versions.slice(0, COUNT).forEach(v => {

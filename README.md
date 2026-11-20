@@ -9,8 +9,9 @@ A Chrome extension that adds a **Rewrite** button to the X (Twitter) post box.
 
 ## How it rewrites
 
-- **Grok on X** (default, no key needed): uses X's built-in Grok through a hidden **Private Chat**. No chat window opens, and nothing is saved to your Grok history.
-- **Claude API** (optional): add your Anthropic API key in Settings.
+It uses X's built-in **Grok**, with your normal X login. No API key, no extra cost.
+When you click Rewrite, it opens Grok out of sight in a **Private Chat**, asks for the rewrite, reads the reply and closes the chat. No chat window shows, and nothing is saved to your Grok history.
+You need an X account that can use Grok.
 
 ## Install
 
@@ -21,8 +22,4 @@ A Chrome extension that adds a **Rewrite** button to the X (Twitter) post box.
 
 ## Settings
 
-Click the extension's icon in the Chrome toolbar to:
-- choose the engine (Grok or Claude)
-- set your Anthropic API key (Claude only; it's kept in Chrome's storage and sent only to api.anthropic.com)
-- pick the Claude model
-- edit the moods shown on hover
+Click the extension's icon in the Chrome toolbar to edit the moods shown on hover.
